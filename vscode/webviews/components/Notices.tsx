@@ -1,4 +1,4 @@
-import { CodyIDE, type CodyNotice } from '@sourcegraph/cody-shared'
+import { CodyIDE, type CodyNotice, isWorkspaceInstance } from '@sourcegraph/cody-shared'
 import { S2_URL } from '@sourcegraph/cody-shared/src/sourcegraph-api/environments'
 import {
     ArrowLeftRightIcon,
@@ -25,7 +25,12 @@ interface Notice {
 }
 
 type NoticeVariants = 'default' | 'warning'
-type NoticeIDs = 'DogfoodS2' | 'TeamsUpgrade' | 'DeepCodyDotCom' | 'DeepCodyEnterprise'
+type NoticeIDs =
+    | 'DogfoodS2'
+    | 'TeamsUpgrade'
+    | 'DeepCodyDotCom'
+    | 'DeepCodyEnterprise'
+    | 'CodyDeprecation'
 
 interface NoticesProps {
     user: UserAccountInfo
@@ -58,6 +63,14 @@ export const Notices: React.FC<NoticesProps> = ({ user, instanceNotices }) => {
         [telemetryRecorder, setDismissedNotices]
     )
 
+    const ampUrl = useMemo(
+        () =>
+            user.IDE === CodyIDE.JetBrains
+                ? 'https://www.npmjs.com/package/@sourcegraph/amp'
+                : 'https://ampcode.com',
+        [user.IDE]
+    )
+
     const notices: Notice[] = useMemo(
         () => [
             ...instanceNotices.map(notice => ({
@@ -71,6 +84,33 @@ export const Notices: React.FC<NoticesProps> = ({ user, instanceNotices }) => {
                     />
                 ),
             })),
+            /**
+             * Cody Deprecation Notice
+             */
+            {
+                id: 'CodyDeprecation',
+                isVisible: user.isDotComUser || isWorkspaceInstance(user.user.endpoint),
+                content: (
+                    <NoticeContent
+                        id="CodyDeprecation"
+                        variant="default"
+                        title="Important Notice"
+                        message={
+                            user.isCodyProUser || isWorkspaceInstance(user.user.endpoint)
+                                ? 'Cody will be turned down on June 25th. Your subscription will be cancelled on June 25th and you will be refunded any pro-rated amount. Check out our new coding assistant Amp.'
+                                : 'Cody will be turned down on June 25th. Check out our new coding assistant Amp.'
+                        }
+                        onDismiss={() => dismissNotice('CodyDeprecation', 'sessional')}
+                        actions={[
+                            {
+                                label: 'Try Amp',
+                                variant: 'default',
+                                href: ampUrl,
+                            },
+                        ]}
+                    />
+                ),
+            },
             /**
              * For Sourcegraph team members who are using Sourcegraph.com to remind them that we want to be dogfooding S2.
              */
@@ -110,14 +150,14 @@ export const Notices: React.FC<NoticesProps> = ({ user, instanceNotices }) => {
                 ),
             },
         ],
-        [user, dismissNotice, instanceNotices]
+        [user, dismissNotice, instanceNotices, ampUrl]
     )
 
     // First, modify the activeNotice useMemo to add conditional logic for DogfoodS2
     const activeNotice = useMemo(
         () =>
             notices.find(notice => {
-                if (notice.id === 'DogfoodS2') {
+                if (notice.id === 'DogfoodS2' || notice.id === 'CodyDeprecation') {
                     return notice.isVisible && !sessionDismissedNotices.includes(notice.id)
                 }
                 return notice.isVisible && !dismissedNotices?.includes(notice.id)
@@ -194,6 +234,7 @@ const NoticeContent: FunctionComponent<NoticeContentProps> = ({
                 <img src={SourcegraphIcon} alt="Sourcegraph Logo" className="tw-h-[16px]" />
             </>
         ),
+        CodyDeprecation: null,
     }[id]
 
     return (
